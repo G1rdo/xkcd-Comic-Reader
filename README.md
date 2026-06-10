@@ -8,3 +8,7 @@ This comic reader was designed in Fusion360, using the following parts:
 * [FFC Extension Cable](https://www.adafruit.com/product/4230)
 
 Further improvements include adding a battery with a JST 2.0mm connector, as the board supports one. 
+
+## License
+
+This work is licensed under a [Creative Commons Attribution-NonCommercial 3.0 License](LICENSE) to reflect that of the [xkcd font](https://github.com/ipython/xkcd-font/) used in the Hack Club Fallout Zine.
