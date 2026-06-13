@@ -1,1 +1,0 @@
-Renders for the design
