@@ -3,7 +3,7 @@
 #include <SPI.h>
 #include <WiFi.h> // Used to connect to WiFi
 #include <HTTPClient.h> // Used to get the data from xkcd.com
-#include <ArduinoJson.h> // Used to parse the JSON 
+#include <ArduinoJson.h> // Used to parse the JSON
 
 #include <secret.h>
 // Warning, this code is completely untested on an actual board, as Hack Club Fallout requires a barebones driver written for design submission
@@ -82,37 +82,89 @@ void setup() {
   bootNumber++;
 }
 
+String getxkcdInfo() {
+  bool downloadSuccessful = false;
+  while (!downloadSuccessful) {
+    if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      const String mostRecentURL = "https://xkcd.com/info.0.json";
+
+      // Initialize HTTP request to get info about the newest XKCD comic
+      http.begin(mostRecentURL);
+      // Perform the GET request and retrieve the JSON data about the newest XKCD comic
+      int httpResponseCode = http.GET();
+
+      if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
+        String payload = http.getString();
+        http.end();
+        downloadSuccessful = true;
+        return payload;
+
+      } else {
+        if (httpResponseCode > 0) {
+          Serial.print("Abnormal Response Code:");
+          Serial.print(httpResponseCode);
+          Serial.print("Payload:");
+          Serial.print(http.getString());
+          http.end();
+
+          // Delay for a bit and restart the loop to try again
+          delay(5000);
+          continue;
+        } else {
+          Serial.print("Error Code:");
+          Serial.print(httpResponseCode);
+          http.end();
+
+          // Delay for a bit and restart the loop to try again
+          delay(5000);
+          continue;
+        }
+      }
+
+    } else {
+      WiFi.begin();
+    }
+  }
+}
+
+uint8_t* getBitmapImage() {
+
+}
 void loop() {
   // Temporary, used for testing
   digitalWrite(LED_BUILTIN, HIGH);
   delay(1000);
   digitalWrite(LED_BUILTIN, LOW);
 
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    const String mostRecentURL = "https://xkcd.com/info.0.json";
-
-    // Initialize HTTP request to get info about the newest XKCD comic
-    http.begin(mostRecentURL);
-    // Perform the GET request and retrieve the JSON data about the newest XKCD comic
-    int httpResponseCode = http.GET();
-    if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
-      String payload = http.getString();
-    } else {
-      if (httpResponseCode > 0) {
-        Serial.print("Abnormal Response Code:");
-        Serial.print(httpResponseCode);
-        Serial.print("Payload:");
-        Serial.print(http.getString());
-      } else {
-        Serial.print("Error Code:");
-        Serial.print(httpResponseCode);
-      }
-    }
-
-    // Get the new URL by parsing the JSON. TODO While we're here, also remember what month, day, and year it is (Need to do math to update the day counter if I want to include it)
-    //String currentImageURL = 
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error, WiFi not connected");
   }
+    
+  // Get the info about the most recent xkcd comic
+  String infoRequestPayload = getxkcdInfo();
+
+  // Get the new URL by parsing the JSON. TODO While we're here, also remember what month, day, and year it is (Need to do math to update the day counter if I want to include it)
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, infoRequestPayload);
+
+  // If there is a Json error, print it and try again in 5000 ms
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.f_str());
+    delay(5000);
+    return; // Try the whole loop again
+  }
+
+  const String safe_title = doc["safe_title"];
+  const String alt = doc["alt"];
+  const String img = doc["img"];
+  xkcdComicNumber = doc["num"];
+
+
+
+  // Need to get a bitmap to call void drawBitmap(int16_t x, int16_t y, uint8_t *bitmap, int16_t w, int16_t h, uint16_t color);
+
 
   //esp_sleep_enable_timer_wakeup(60 * uS_TO_S_FACTOR);
   esp_sleep_enable_timer_wakeup(86400 * uS_TO_S_FACTOR); // Wakeup the same time every day
