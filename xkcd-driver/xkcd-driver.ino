@@ -85,51 +85,100 @@ void setup() {
 String getxkcdInfo() {
   bool downloadSuccessful = false;
   while (!downloadSuccessful) {
-    if (WiFi.status() == WL_CONNECTED) {
-      HTTPClient http;
-      const String mostRecentURL = "https://xkcd.com/info.0.json";
-
-      // Initialize HTTP request to get info about the newest XKCD comic
-      http.begin(mostRecentURL);
-      // Perform the GET request and retrieve the JSON data about the newest XKCD comic
-      int httpResponseCode = http.GET();
-
-      if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
-        String payload = http.getString();
-        http.end();
-        downloadSuccessful = true;
-        return payload;
-
-      } else {
-        if (httpResponseCode > 0) {
-          Serial.print("Abnormal Response Code:");
-          Serial.print(httpResponseCode);
-          Serial.print("Payload:");
-          Serial.print(http.getString());
-          http.end();
-
-          // Delay for a bit and restart the loop to try again
-          delay(5000);
-          continue;
-        } else {
-          Serial.print("Error Code:");
-          Serial.print(httpResponseCode);
-          http.end();
-
-          // Delay for a bit and restart the loop to try again
-          delay(5000);
-          continue;
-        }
-      }
-
-    } else {
+    // If WiFi not connected, try to connect and restart while loop
+    if (WiFi.status() != WL_CONNECTED) {
       WiFi.begin();
+      delay(15000);
+      continue;
+    }
+
+    HTTPClient http;
+    const String mostRecentURL = "https://xkcd.com/info.0.json";
+
+    // Initialize HTTP request to get info about the newest XKCD comic
+    http.begin(mostRecentURL);
+    // Perform the GET request and retrieve the JSON data about the newest XKCD comic
+    int httpResponseCode = http.GET();
+
+    if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
+      String payload = http.getString();
+      http.end();
+      downloadSuccessful = true;
+    } else {
+      if (httpResponseCode > 0) {
+        Serial.print("Abnormal Response Code:");
+        Serial.print(httpResponseCode);
+        Serial.print("Payload:");
+        Serial.print(http.getString());
+        http.end();
+
+        // Delay for a bit and restart the loop to try again
+        delay(5000);
+        continue;
+      } else {
+        Serial.print("Error Code:");
+        Serial.print(httpResponseCode);
+        http.end();
+
+        // Delay for a bit and restart the loop to try again
+        delay(5000);
+        continue;
+      }
     }
   }
+  return payload;
 }
 
 uint8_t* getBitmapImage() {
+  bool downloadSuccessful = false;
+  while (!downloadSuccessful) {
+    // If WiFi not connected, try to connect and restart while loop
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.begin();
+      delay(15000);
+      continue;
+    }
 
+    HTTPClient http;
+    const String mostRecentURL = "https://xkcd.com/info.0.json";
+
+    // Initialize HTTP request to get info about the newest XKCD comic
+    http.begin(mostRecentURL);
+    // Perform the GET request and retrieve the JSON data about the newest XKCD comic
+    int httpResponseCode = http.GET();
+
+    if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
+      WiFiClient* stream = http.getStreamPtr();
+
+      if (stream != nullptr) {
+        uint8_t bitMapImageBuffer //TODO: Finish this
+      }
+
+      http.end();
+      downloadSuccessful = true;
+    } else {
+      if (httpResponseCode > 0) {
+        Serial.print("Abnormal Response Code:");
+        Serial.print(httpResponseCode);
+        Serial.print("Payload:");
+        Serial.print(http.getString());
+        http.end();
+
+        // Delay for a bit and restart the loop to try again
+        delay(5000);
+        continue;
+      } else {
+        Serial.print("Error Code:");
+        Serial.print(httpResponseCode);
+        http.end();
+
+        // Delay for a bit and restart the loop to try again
+        delay(5000);
+        continue;
+      }
+    }
+  }
+  return payload;
 }
 void loop() {
   // Temporary, used for testing
