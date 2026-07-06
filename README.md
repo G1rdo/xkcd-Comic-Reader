@@ -9,6 +9,8 @@ This comic reader was designed in Fusion360, using the following parts:
 
 Further improvements include adding a battery with a JST 2.0mm connector, as the board supports one. 
 
+<img width="1280" height="1280" alt="Final Case v2 Front Non-Transparent" src="https://github.com/user-attachments/assets/173264b8-28bb-475a-94e3-edef077e2110" />
+
 ## License
 
 This work is licensed under a [Creative Commons Attribution-NonCommercial 3.0 License](LICENSE) to reflect that of the [xkcd font](https://github.com/ipython/xkcd-font/) used in the Hack Club Fallout Zine.
