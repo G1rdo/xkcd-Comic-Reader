@@ -141,94 +141,81 @@ String getxkcdInfo() {
 }
 
 // Get the image via the link from getXKCDInfo TODO: Make this more elegant
-void getxkcdComicImg(String imgUrl) {
-  String payload;
-  bool downloadSuccessful = false;
-  while (!downloadSuccessful) {
-    // If WiFi not connected, try to connect and restart while loop
-    if (WiFi.status() != WL_CONNECTED) {
-      WiFi.begin();
-      delay(15000);
-      continue;
+// 200 means successful, (no error code). 1 Means no wifi, 2 means invalid image size
+int getxkcdComicImg(String imgUrl) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return 1;
+  }
+
+  // Initialize HTTP request to get img from XKCD comic
+  http.begin(imgUrl);
+  // Perform the GET request and retrieve the JSON data about the newest XKCD comic
+  int httpResponseCode = http.GET();
+
+  if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
+    int contentLength = http.getSize();
+    if (contentLength <= 0 || contentLength > 500 * 1024) {
+      Serial.println("Invalid image size");
+      http.end();
+      return 2;
     }
 
-    // Initialize HTTP request to get img from XKCD comic
-    http.begin(imgUrl);
-    // Perform the GET request and retrieve the JSON data about the newest XKCD comic
-    int httpResponseCode = http.GET();
+    // This won't work if the XKCD server doesn't send contentLength
+    pngBuffer = (uint8_t *)ps_malloc(contentLength);
 
-    if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
-      int contentLength = http.getSize();
-      if (contentLength <= 0 || contentLength > 500 * 1024) {
-        Serial.println("Invalid image size");
-        http.end();
-        // Delay for a bit and restart the loop to try again 
-        // TODO: Make this better so it doesn't burn power on days where XKCD comic is not displayable
-        delay(5000);
-        continue;
+    if (!pngBuffer) {
+      Serial.println("PSRAM allocation failed");
+      http.end();
+      return 3;
+    }
+
+    WiFiClient *stream = http.getStreamPtr();
+
+    size_t received = 0;
+
+    while (http.connected() && received < contentLength) {
+      size_t available = stream -> available();
+      if (available) {
+        int len = stream -> readBytes(
+          pngBuffer + received,
+          min((size_t)available, contentLength - received));
+        received += len;
       }
+      delay(1);
+    }
 
-      // This won't work if the XKCD server doesn't send contentLength
-      pngBuffer = (uint8_t *)ps_malloc(contentLength);
+    http.end();
 
-      if (!pngBuffer) {
-        Serial.println("PSRAM allocation failed");
-        http.end();
-        continue;
-      }
+    if (received != contentLength) {
+      free(pngBuffer);
+      pngBuffer = nullptr;
+      Serial.println("Did not receieve full content of png");
+      delay(5000);
+      return 4;
+    }
 
-      WiFiClient *stream = http.getStreamPtr();
+    pngSize = received;
 
-      size_t received = 0;
+    Serial.printf("Downloaded %u bytes\n", pngSize);
 
-      while (http.connected() && received < contentLength) {
-        size_t available = stream -> available();
-        if (available) {
-          int len = stream -> readBytes(
-            pngBuffer + received,
-            min((size_t)available, contentLength - received));
-          received += len;
-        }
-        delay(1);
-      }
+    // Image successfully stored in PSRAM, pngBuffer contains the image and pngSize contains its size.
+    return 200;
 
+  } else {
+    if (httpResponseCode > 0) {
+      Serial.print("Abnormal Response Code:");
+      Serial.print(httpResponseCode);
+      Serial.print("Payload:");
+      Serial.print(http.getString());
       http.end();
 
-      if (received != contentLength) {
-        free(pngBuffer);
-        pngBuffer = nullptr;
-        Serial.println("Did not received full content of png");
-        delay(5000);
-        continue;
-      }
-
-      pngSize = received;
-
-      Serial.printf("Downloaded %u bytes\n", pngSize);
-
-      // Image successfully stored in PSRAM, pngBuffer contains the image and pngSize contains its size.
-      downloadSuccessful = true;
-
+      return httpResponseCode;
     } else {
-      if (httpResponseCode > 0) {
-        Serial.print("Abnormal Response Code:");
-        Serial.print(httpResponseCode);
-        Serial.print("Payload:");
-        Serial.print(http.getString());
-        http.end();
+      Serial.print("Error Code:");
+      Serial.print(httpResponseCode);
+      http.end();
 
-        // Delay for a bit and restart the loop to try again
-        delay(5000);
-        continue;
-      } else {
-        Serial.print("Error Code:");
-        Serial.print(httpResponseCode);
-        http.end();
-
-        // Delay for a bit and restart the loop to try again
-        delay(5000);
-        continue;
-      }
+      return httpResponseCode;
     }
   }
 }
@@ -310,7 +297,34 @@ void loop() {
   xkcdComicNumber = doc["num"]; // RTC variable, already declared above
 
 
-  getxkcdComicImg(imgUrl); // Image now stored in pngBuffer
+  int imgResponseCode = getxkcdComicImg(imgUrl);
+  switch (imgResponseCode) {
+    case 200:
+      // Image now stored in pngBuffer
+      break;
+    case 1:
+      // Wifi.status is not connected
+      Serial.println("Wifi not connected");
+      break;
+    case 2:
+      // Invalid image size
+      Serial.println("Invalid image size");
+      break;
+    case 3:
+      // PSRAM allocation failed
+      Serial.println("PSRAM allocation failed");
+      break;
+    case 4:
+      // Did not receive full content of png
+      Serial.println("Did not receive full content of png");
+      break;
+    default:
+      Serial.println("httpResponseCode" + imgResponseCode);
+      break;
+      
+      
+  }
+
   drawxkcdComicPng(); // Draw the image stored in pngBuffer line by line
 
   esp_sleep_enable_timer_wakeup(86400 * uS_TO_S_FACTOR); // Wakeup the same time every day
