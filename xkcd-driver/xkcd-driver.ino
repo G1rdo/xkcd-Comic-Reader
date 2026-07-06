@@ -4,9 +4,11 @@
 #include <WiFi.h> // Used to connect to WiFi
 #include <HTTPClient.h> // Used to get the data from xkcd.com
 #include <ArduinoJson.h> // Used to parse the JSON
+#include <PNGdec.h> // Used to decode the PNG line by line
 
 #include <secret.h>
 // Warning, this code is completely untested on an actual board, as Hack Club Fallout requires a barebones driver written for design submission
+// It is also effectively the second C++ program I have ever written, so please take that as a warning.
 
 // Onboard EE04 internal hardware pin routings mapped to ESP32-S3 GPIOs
 // Source https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/
@@ -21,17 +23,18 @@
 #define EPD_MISO   -1   // MISO pin is unused for display-only SPI
 
 // Define button pins according to schematic
-const int BUTTON_KEY0 = 2;   // KEY0 - GPIO2
-const int BUTTON_KEY1 = 3;   // KEY1 - GPIO3
-const int BUTTON_KEY2 = 5;   // KEY2 - GPIO5
+const int BUTTON_KEY1 = 2;   // KEY0 - GPIO2
+const int BUTTON_KEY2 = 3;   // KEY1 - GPIO3
+const int BUTTON_KEY3 = 5;   // KEY2 - GPIO5
 
 // Button state variables
-bool lastKey0State = HIGH;
 bool lastKey1State = HIGH;
 bool lastKey2State = HIGH;
+bool lastKey3State = HIGH;
 
 // Instantiate the monochrome driver configuration for the UC8253 (Width: 240, Height: 416)
-Adafruit_UC8253 display(416, 240, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+Adafruit_UC8253 display(240, 416, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+display.setRotation(1) // Set rotation to landscape
 
 #define BLACK EPD_BLACK
 #define uS_TO_S_FACTOR 1000000ULL // Multiply by micro seconds to get seconds
@@ -52,15 +55,15 @@ void setup() {
   display.begin();
 
   // Set the physical buttons for the EE04
-  pinMode(BUTTON_KEY0, INPUT_PULLUP);
   pinMode(BUTTON_KEY1, INPUT_PULLUP);
   pinMode(BUTTON_KEY2, INPUT_PULLUP);
+  pinMode(BUTTON_KEY3, INPUT_PULLUP);
 
-  lastKey0State = digitalRead(BUTTON_KEY0);
   lastKey1State = digitalRead(BUTTON_KEY1);
   lastKey2State = digitalRead(BUTTON_KEY2);
+  lastKey3State = digitalRead(BUTTON_KEY3);
 
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); // Use BUTTON_KEY0 as wakeup button
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_5, 1); // Use BUTTON_KEY3 as wakeup button
 
   // Setup the WiFi to connect with credentials (high power use) the first time and use cached credentials on boots after that.
   WiFi.persistent(true);
@@ -83,6 +86,7 @@ void setup() {
 }
 
 String getxkcdInfo() {
+  String payload;
   bool downloadSuccessful = false;
   while (!downloadSuccessful) {
     // If WiFi not connected, try to connect and restart while loop
@@ -93,15 +97,14 @@ String getxkcdInfo() {
     }
 
     HTTPClient http;
-    const String mostRecentURL = "https://xkcd.com/info.0.json";
 
     // Initialize HTTP request to get info about the newest XKCD comic
-    http.begin(mostRecentURL);
+    http.begin("https://xkcd.com/info.0.json");
     // Perform the GET request and retrieve the JSON data about the newest XKCD comic
     int httpResponseCode = http.GET();
 
     if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
-      String payload = http.getString();
+      payload = http.getString();
       http.end();
       downloadSuccessful = true;
     } else {
@@ -129,57 +132,55 @@ String getxkcdInfo() {
   return payload;
 }
 
-uint8_t* getBitmapImage() {
-  bool downloadSuccessful = false;
-  while (!downloadSuccessful) {
-    // If WiFi not connected, try to connect and restart while loop
-    if (WiFi.status() != WL_CONNECTED) {
-      WiFi.begin();
-      delay(15000);
-      continue;
-    }
+// uint8_t* getBitmapImage(String comicImageUrl) {
+//   bool downloadSuccessful = false;
+//   while (!downloadSuccessful) {
+//     // If WiFi not connected, try to connect and restart while loop
+//     if (WiFi.status() != WL_CONNECTED) {
+//       WiFi.begin();
+//       delay(15000);
+//       continue;
+//     }
 
-    HTTPClient http;
-    const String mostRecentURL = "https://xkcd.com/info.0.json";
+//     HTTPClient http;
 
-    // Initialize HTTP request to get info about the newest XKCD comic
-    http.begin(mostRecentURL);
-    // Perform the GET request and retrieve the JSON data about the newest XKCD comic
-    int httpResponseCode = http.GET();
+//     // Initialize HTTP request to retrieve the XKCD comic
+//     http.begin(comicImageUrl);
+//     // Perform the GET request and retrieve the JSON data about the newest XKCD comic
+//     int httpResponseCode = http.GET();
 
-    if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
-      WiFiClient* stream = http.getStreamPtr();
+//     if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
+//       // Not sure how do do this. Either make this function draw the image to the ESP32 S3 or return the bitmap
 
-      if (stream != nullptr) {
-        uint8_t bitMapImageBuffer //TODO: Finish this
-      }
+//       }
 
-      http.end();
-      downloadSuccessful = true;
-    } else {
-      if (httpResponseCode > 0) {
-        Serial.print("Abnormal Response Code:");
-        Serial.print(httpResponseCode);
-        Serial.print("Payload:");
-        Serial.print(http.getString());
-        http.end();
+//       http.end();
+//       downloadSuccessful = true;
+//     } else {
+//       if (httpResponseCode > 0) {
+//         Serial.print("Abnormal Response Code:");
+//         Serial.print(httpResponseCode);
+//         Serial.print("Payload:");
+//         Serial.print(http.getString());
+//         http.end();
 
-        // Delay for a bit and restart the loop to try again
-        delay(5000);
-        continue;
-      } else {
-        Serial.print("Error Code:");
-        Serial.print(httpResponseCode);
-        http.end();
+//         // Delay for a bit and restart the loop to try again
+//         delay(5000);
+//         continue;
+//       } else {
+//         Serial.print("Error Code:");
+//         Serial.print(httpResponseCode);
+//         http.end();
 
-        // Delay for a bit and restart the loop to try again
-        delay(5000);
-        continue;
-      }
-    }
-  }
-  return payload;
-}
+//         // Delay for a bit and restart the loop to try again
+//         delay(5000);
+//         continue;
+//       }
+//     }
+//   }
+//   return payload;
+// }
+
 void loop() {
   // Temporary, used for testing
   digitalWrite(LED_BUILTIN, HIGH);
@@ -208,7 +209,7 @@ void loop() {
   const String safe_title = doc["safe_title"];
   const String alt = doc["alt"];
   const String img = doc["img"];
-  xkcdComicNumber = doc["num"];
+  xkcdComicNumber = doc["num"]; // RTC variable, already declared above
 
 
 
