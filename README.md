@@ -1,4 +1,5 @@
 # xkcd Comic Reader
+[XKCD Comic Reader Zine RGB.pdf](https://github.com/user-attachments/files/29714302/XKCD.Comic.Reader.Zine.RGB.pdf)
 Ever wanted a E-ink display to get your tri-weekly xkcd comics? This project is for you! This fully open source e-ink display mount/case uses an onboard ESP32-S3 to download and display xkcd comics as they are produced with minimal power use. It also uses a non-backlit E-ink display so that it won't keep you up at night with light if you want to keep it in your bedroom!
 
 This comic reader was designed in Fusion360, using the following parts:
