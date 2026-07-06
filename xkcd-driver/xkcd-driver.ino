@@ -233,12 +233,50 @@ void getxkcdComicImg(String imgUrl) {
   }
 }
 
+// TODO: Need to make this be able to resize the image as well, but it works for testing with specific XKCD comics
+void drawxkcdComicPng() {
+  int returnCode = xkcdComicPng.openRAM(pngBuffer, pngSize, PNGDrawLine);
 
-void PNGDraw(PNGDRAW *pngDraw) {
-  static uint16_t lineBuffer[1024]; 
+  if (returnCode == PNG_SUCCESS) {
+    display.clearBuffer();
 
-  xkcdComicPng.getLineAsRGB565(pngDraw, lineBuffer, PNG_RGB565_LITTLE_ENDIAN, 0);
-  // Finish this function using the libraries available to you (read source code of libraries)
+    Serial.printf("PNG: %d x %d\n", xkcdComicPng.getWidth(), xkcdComicPng.getHeight());
+    while (xkcdComicPng.decode(NULL, 0) == PNG_SUCCESS) {
+
+    }
+    xkcdComicPng.close();
+  } else {
+    Serial.printf("PNG open failed: %d\n", returnCode);
+  }
+}
+
+
+int PNGDrawLine(PNGDRAW *pngDraw) {
+    static uint16_t lineBuffer[240];
+
+    xkcdComicPng.getLineAsRGB565(
+        pngDraw,
+        lineBuffer,
+        PNG_RGB565_BIG_ENDIAN,
+        0);
+
+    for (int x = 0; x < pngDraw->iWidth && x < 240; x++) {
+
+        uint16_t c = lineBuffer[x];
+
+        uint8_t r = ((c >> 11) & 0x1F) << 3;
+        uint8_t g = ((c >> 5) & 0x3F) << 2;
+        uint8_t b = (c & 0x1F) << 3;
+
+
+        uint8_t gray = (30 * r + 59 * g + 11 * b) / 100;
+
+        display.drawPixel(
+          x,
+          pngDraw->y,
+          gray > 128 ? EPD_WHITE : EPD_BLACK);
+    }
+    return 1;
 }
 
 void loop() {
@@ -273,12 +311,8 @@ void loop() {
 
 
   getxkcdComicImg(imgUrl); // Image now stored in pngBuffer
+  drawxkcdComicPng(); // Draw the image stored in pngBuffer line by line
 
-
-  // Need to get a bitmap to call void drawBitmap(int16_t x, int16_t y, uint8_t *bitmap, int16_t w, int16_t h, uint16_t color);
-  // This is hard. I need to get the image, resize it, and display it, but I'm not sure if there will be enough ram. Problem for tomorrow me.
-
-  //esp_sleep_enable_timer_wakeup(60 * uS_TO_S_FACTOR);
   esp_sleep_enable_timer_wakeup(86400 * uS_TO_S_FACTOR); // Wakeup the same time every day
   esp_deep_sleep_start();
 }
