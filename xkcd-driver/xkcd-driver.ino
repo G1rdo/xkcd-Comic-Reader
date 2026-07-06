@@ -9,6 +9,7 @@
 #include <secret.h>
 // Warning, this code is completely untested on an actual board, as Hack Club Fallout requires a barebones driver written for design submission
 // It is also effectively the second C++ program I have ever written, so please take that as a warning.
+// This is a case of make it, then make it good.
 
 // Onboard EE04 internal hardware pin routings mapped to ESP32-S3 GPIOs
 // Source https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/
@@ -34,7 +35,6 @@ bool lastKey3State = HIGH;
 
 // Instantiate the monochrome driver configuration for the UC8253 (Width: 240, Height: 416)
 Adafruit_UC8253 display(240, 416, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
-display.setRotation(1) // Set rotation to landscape
 
 #define BLACK EPD_BLACK
 #define uS_TO_S_FACTOR 1000000ULL // Multiply by micro seconds to get seconds
@@ -43,6 +43,12 @@ RTC_DATA_ATTR int8_t day = 1; // Sets the day, with day 1 being Sunday, and day 
 RTC_DATA_ATTR int bootNumber = 1;
 RTC_DATA_ATTR int xkcdComicNumber = 1;
 //int status = WL_IDLE_STATUS;
+
+PNG xkcdComicPng;
+uint8_t *pngBuffer = nullptr;
+size_t pngSize = 0;
+
+HTTPClient http;
 
 
 void setup() {
@@ -53,6 +59,10 @@ void setup() {
   }
   Serial.println("Adafruit EPD test");
   display.begin();
+  display.setRotation(1); // Set rotation to landscape
+
+  Serial.printf("Free PSRAM: %u bytes\n", ESP.getFreePsram());
+
 
   // Set the physical buttons for the EE04
   pinMode(BUTTON_KEY1, INPUT_PULLUP);
@@ -96,8 +106,6 @@ String getxkcdInfo() {
       continue;
     }
 
-    HTTPClient http;
-
     // Initialize HTTP request to get info about the newest XKCD comic
     http.begin("https://xkcd.com/info.0.json");
     // Perform the GET request and retrieve the JSON data about the newest XKCD comic
@@ -132,54 +140,106 @@ String getxkcdInfo() {
   return payload;
 }
 
-// uint8_t* getBitmapImage(String comicImageUrl) {
-//   bool downloadSuccessful = false;
-//   while (!downloadSuccessful) {
-//     // If WiFi not connected, try to connect and restart while loop
-//     if (WiFi.status() != WL_CONNECTED) {
-//       WiFi.begin();
-//       delay(15000);
-//       continue;
-//     }
+// Get the image via the link from getXKCDInfo TODO: Make this more elegant
+void getxkcdComicImg(String imgUrl) {
+  String payload;
+  bool downloadSuccessful = false;
+  while (!downloadSuccessful) {
+    // If WiFi not connected, try to connect and restart while loop
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.begin();
+      delay(15000);
+      continue;
+    }
 
-//     HTTPClient http;
+    // Initialize HTTP request to get img from XKCD comic
+    http.begin(imgUrl);
+    // Perform the GET request and retrieve the JSON data about the newest XKCD comic
+    int httpResponseCode = http.GET();
 
-//     // Initialize HTTP request to retrieve the XKCD comic
-//     http.begin(comicImageUrl);
-//     // Perform the GET request and retrieve the JSON data about the newest XKCD comic
-//     int httpResponseCode = http.GET();
+    if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
+      int contentLength = http.getSize();
+      if (contentLength <= 0 || contentLength > 500 * 1024) {
+        Serial.println("Invalid image size");
+        http.end();
+        // Delay for a bit and restart the loop to try again 
+        // TODO: Make this better so it doesn't burn power on days where XKCD comic is not displayable
+        delay(5000);
+        continue;
+      }
 
-//     if (httpResponseCode == 200) {  // This url location should stay the same, so anything other than 200 is abnormal
-//       // Not sure how do do this. Either make this function draw the image to the ESP32 S3 or return the bitmap
+      // This won't work if the XKCD server doesn't send contentLength
+      pngBuffer = (uint8_t *)ps_malloc(contentLength);
 
-//       }
+      if (!pngBuffer) {
+        Serial.println("PSRAM allocation failed");
+        http.end();
+        continue;
+      }
 
-//       http.end();
-//       downloadSuccessful = true;
-//     } else {
-//       if (httpResponseCode > 0) {
-//         Serial.print("Abnormal Response Code:");
-//         Serial.print(httpResponseCode);
-//         Serial.print("Payload:");
-//         Serial.print(http.getString());
-//         http.end();
+      WiFiClient *stream = http.getStreamPtr();
 
-//         // Delay for a bit and restart the loop to try again
-//         delay(5000);
-//         continue;
-//       } else {
-//         Serial.print("Error Code:");
-//         Serial.print(httpResponseCode);
-//         http.end();
+      size_t received = 0;
 
-//         // Delay for a bit and restart the loop to try again
-//         delay(5000);
-//         continue;
-//       }
-//     }
-//   }
-//   return payload;
-// }
+      while (http.connected() && received < contentLength) {
+        size_t available = stream -> available();
+        if (available) {
+          int len = stream -> readBytes(
+            pngBuffer + received,
+            min((size_t)available, contentLength - received));
+          received += len;
+        }
+        delay(1);
+      }
+
+      http.end();
+
+      if (received != contentLength) {
+        free(pngBuffer);
+        pngBuffer = nullptr;
+        Serial.println("Did not received full content of png");
+        delay(5000);
+        continue;
+      }
+
+      pngSize = received;
+
+      Serial.printf("Downloaded %u bytes\n", pngSize);
+
+      // Image successfully stored in PSRAM, pngBuffer contains the image and pngSize contains its size.
+      downloadSuccessful = true;
+
+    } else {
+      if (httpResponseCode > 0) {
+        Serial.print("Abnormal Response Code:");
+        Serial.print(httpResponseCode);
+        Serial.print("Payload:");
+        Serial.print(http.getString());
+        http.end();
+
+        // Delay for a bit and restart the loop to try again
+        delay(5000);
+        continue;
+      } else {
+        Serial.print("Error Code:");
+        Serial.print(httpResponseCode);
+        http.end();
+
+        // Delay for a bit and restart the loop to try again
+        delay(5000);
+        continue;
+      }
+    }
+  }
+}
+
+
+void PNGDraw(PNGDRAW *pngDraw) {
+  static uint16_t lineBuffer[1024]; 
+
+  xkcdComicPng.getLineAsRGB565(pngDraw, lineBuffer, PNG_RGB565_LITTLE_ENDIAN, 0);
+  // Finish this function using the libraries available to you (read source code of libraries)
+}
 
 void loop() {
   // Temporary, used for testing
@@ -208,13 +268,15 @@ void loop() {
 
   const String safe_title = doc["safe_title"];
   const String alt = doc["alt"];
-  const String img = doc["img"];
+  const String imgUrl = doc["img"];
   xkcdComicNumber = doc["num"]; // RTC variable, already declared above
 
 
+  getxkcdComicImg(imgUrl); // Image now stored in pngBuffer
+
 
   // Need to get a bitmap to call void drawBitmap(int16_t x, int16_t y, uint8_t *bitmap, int16_t w, int16_t h, uint16_t color);
-
+  // This is hard. I need to get the image, resize it, and display it, but I'm not sure if there will be enough ram. Problem for tomorrow me.
 
   //esp_sleep_enable_timer_wakeup(60 * uS_TO_S_FACTOR);
   esp_sleep_enable_timer_wakeup(86400 * uS_TO_S_FACTOR); // Wakeup the same time every day
