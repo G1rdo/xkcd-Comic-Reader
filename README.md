@@ -13,8 +13,10 @@ This comic reader was designed in Fusion360, using the following parts:
 Further improvements include adding a battery with a JST 2.0mm connector, as the board supports one. 
 
 <img width="1280" height="1280" alt="Final Case v2 Front Non-Transparent" src="https://github.com/user-attachments/assets/173264b8-28bb-475a-94e3-edef077e2110" />
+
 ## Instructions
 First, connect the E-Ink display via the FFC Extension cable to the PCB. Then, download this github repository and edit ./secret.h.example to include your WiFi password and name. Flash the firmware to the PCB (compile the xkcd-driver.ino file and send it over USB), and the screen should light up with the newest XKCD comic! It will automatically update every few days.
+
 ## License
 
 This work is licensed under a [Creative Commons Attribution-NonCommercial 3.0 License](LICENSE) to reflect that of the [xkcd font](https://github.com/ipython/xkcd-font/) used in the Hack Club Fallout Zine.
