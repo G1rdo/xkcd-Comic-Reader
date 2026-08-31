@@ -1,4 +1,5 @@
 > "If you have an idea and publish it on the internet, that counts as a ghost of done." -Cult of Done
+>
 > This project is not completed, and for the foreseeable future not going to be completed by me.
 > This was one of my first times writing code for a ESP32, and the code likely does not reflect best practices and probably should be redone from scratch.
 > From what I can tell, the hardware should work, but has not been tested physically.
