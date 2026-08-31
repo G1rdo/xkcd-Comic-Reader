@@ -1,3 +1,8 @@
+> "If you have an idea and publish it on the internet, that counts as a ghost of done." -Cult of Done
+> This project is not completed, and for the foreseeable future not going to be completed by me.
+> This was one of my first times writing code for a ESP32, and the code likely does not reflect best practices and probably should be redone from scratch.
+> From what I can tell, the hardware should work, but has not been tested physically.
+
 # xkcd Comic Reader
 
 <img width="677" height="1036" alt="image" src="https://github.com/user-attachments/assets/f080811e-01f6-4fe8-b37c-cd80bf88cfed" />
